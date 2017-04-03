@@ -103,34 +103,26 @@ var initPlayer = (doc) => {
 var run = () => {
   MongoClient.connect(url, (err, db) => {
     console.log("Connected to Mongo Instance.");
+    var collection = db.collection('Player');
 
-    var insertDocument = (obj) => {
-      return new Promise((resolve, reject) => {
-        var collection = db.collection('Player');
+    var getDoc = async (obj) => {
+      collection.findOne({ Id: obj.Id }).then((doc) => {
+        return doc;
+      })
+    }
 
-        // test if document already exists
-        collection.findOne({ Id: obj.Id }, (err, doc) => {
-          if (err) console.log(err);
-
-          if (doc) {
-            console.log(doc);
-            resolve()
-          } else {
-            var player = initPlayer(obj);
-            collection.insert(player, (err, doc) => {
-              if (err) console.log(err);
-              console.log(doc);
-              resolve()
-            });
-          }
-        });
+    var insertDoc = async (obj) => {
+      var transformedPlayer = initPlayer(obj);
+      collection.insert(transformedPlayer).then((doc) => {
+        console.log(doc);
       })
     }
 
     csv({ delimiter: ";" })
     .fromFile(csvFilePath)
     .on('json', async (jsonObj) => {
-      await insertDocument(jsonObj);
+      var playerDoc = await getDoc(jsonObj)
+      await insertDoc(jsonObj)
     })
     .on('done', (error) => {
       console.log('end');
