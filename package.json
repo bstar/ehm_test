@@ -9,7 +9,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "bluebird": "^3.5.0",
     "csvtojson": "^1.1.4",
+    "minimist": "^1.2.0",
     "mongodb": "^2.2.25"
   },
   "devDependencies": {
