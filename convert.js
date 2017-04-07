@@ -1,17 +1,29 @@
-const csvFilePath = './csv/test_players2.csv';
-const csv = require('csvtojson');
+const csvFilePath = './csv/test_players.csv';
+const csv         = require('csvtojson');
 const MongoClient = require('mongodb').MongoClient;
-const url = 'mongodb://localhost:27017/ehm';
+const url         = 'mongodb://localhost:27017/ehm';
+const argv        = require('minimist')(process.argv.slice(2));
 // const Promise = require("bluebird");
-var argv = require('minimist')(process.argv.slice(2));
 
-if (argv.date) {
+var isValidDate = (date) => {
+  let dateArray = date.split("-"),
+      year = dateArray[0],
+      month = parseInt(dateArray[1], 10),
+      day = parseInt(dateArray[2], 10);
+
+  if ( (year.length === 4) && (month >= 1) && (month <= 12) && (day >= 1) && (day <= 31) ) {
+    return true;
+  } else {
+    return false;
+  }
+};
+
+// TODO track dates used in a collection
+if (isValidDate(argv.date)) {
   var date = argv.date;
 } else {
-  throw("Date Arg is Required! [eg: --date 12-31-1976]");
+  throw("Date Arg is Not Provided or is Invalid! [eg: --date 12-31-1976]");
 }
-
-console.log("Argv: ", argv.date);
 
 var initPlayer = (doc) => {
   var player = {};
@@ -24,6 +36,7 @@ var initPlayer = (doc) => {
   player.stats.positional = {};
   player.stats.hidden = {};
 
+  // general non-stat player properties, TODO: why are height and weight not exported?
   player._id = doc._id;
   player.ehm_id = doc.Id;
   player.general.name = doc.Name;
@@ -50,11 +63,12 @@ var initPlayer = (doc) => {
   player.general.player_roles = doc['Player Roles'];
   player.general.defensive_role = [ { date: date, value: doc['Defensive Role'] } ];
   player.general.offensive_role = [ { date: date, value: doc['Offensive Role'] } ];
-  // player.general.int = [ { date: date, value: doc.Int } ];
+  // player.general.int = [ { date: date, value: doc.Int } ]; // TODO decide if I should track this stat, no idea what it's for
   player.general.morale = [ doc.Morale ];
   player.general.favorite_number = doc['Favorite Number'];
   player.general.squad_number = [ { date: date, value: doc['Squad Number'] } ];
 
+  // stats hidden by the game, should probably not be revealed in UI
   player.stats.hidden.loyalty = [ { date: date, value: doc.Loyalty } ];
   player.stats.hidden.pressure = [ { date: date, value: doc.Pressure } ];
   player.stats.hidden.professionalism = [ { date: date, value: doc.Professionalism } ];
@@ -75,6 +89,7 @@ var initPlayer = (doc) => {
   player.stats.hidden.one_on_ones = [ { date: date, value: doc['One On Ones'] } ];
   player.stats.hidden.versatility = [ { date: date, value: doc.Versatility } ];
 
+  // positional stat ratings
   player.stats.positional.goaltender = [ { date: date, value: doc.Goaltender } ];
   player.stats.positional.left_defence = [ { date: date, value: doc['Left Defence'] } ];
   player.stats.positional.right_defence = [ { date: date, value: doc['Right Defence'] } ];
@@ -82,6 +97,7 @@ var initPlayer = (doc) => {
   player.stats.positional.right_wing = [ { date: date, value: doc['Right Wing'] } ];
   player.stats.positional.center = [ { date: date, value: doc.Center } ];
 
+  // stats labeled as 'mental' in game
   player.stats.mental.aggression = [ { date: date, value: doc.Aggression } ];
   player.stats.mental.anticipation = [ { date: date, value: doc.Anticipation } ];
   player.stats.mental.bravery = [ { date: date, value: doc.Bravery } ];
@@ -92,6 +108,7 @@ var initPlayer = (doc) => {
   player.stats.mental.teamwork = [ { date: date, value: doc.Teamwork } ];
   player.stats.mental.work_rate = [ { date: date, value: doc['Work Rate'] } ];
 
+  // stats labeled as 'physical' in game
   player.stats.physical.acceleration = [ { date: date, value: doc.Acceleration } ];
   player.stats.physical.agility = [ { date: date, value: doc.Agility } ];
   player.stats.physical.balance = [ { date: date, value: doc.Balance } ];
@@ -99,6 +116,7 @@ var initPlayer = (doc) => {
   player.stats.physical.stamina = [ { date: date, value: doc.Stamina } ];
   player.stats.physical.strength = [ { date: date, value: doc.Strength } ];
 
+  // stats labeled as 'technical' in game for forwards and defencemen
   player.stats.technical.checking = [ { date: date, value: doc.Checking } ];
   player.stats.technical.deflections = [ { date: date, value: doc.Deflections } ];
   player.stats.technical.deking = [ { date: date, value: doc.Deking } ];
@@ -112,6 +130,7 @@ var initPlayer = (doc) => {
   player.stats.technical.stickhandling = [ { date: date, value: doc.Stickhandling } ];
   player.stats.technical.wristshot = [ { date: date, value: doc.Wristshot } ];
 
+  // stats labeled as 'technical' in game for goalies
   player.stats.technical.blocker = [ { date: date, value: doc.Blocker } ];
   player.stats.technical.glove = [ { date: date, value: doc.Glove } ];
   player.stats.technical.rebound_control = [ { date: date, value: doc['Rebound Control'] } ];
@@ -127,7 +146,7 @@ var run = () => {
     var collection = db.collection('Player');
 
     var processStatArray = ({ csvPlayer, dbPlayer, category, stat }) => {
-      // console.log("Process Array Stat:", stat);
+      console.log("Process Array Stat:", stat);
       var currentStatCsv = csvPlayer[category][stat].slice(-1)[0];
       var currentStatDb = dbPlayer[category][stat].slice(-1)[0];
 
@@ -143,7 +162,7 @@ var run = () => {
     };
 
     var processStat = ({ csvPlayer, dbPlayer, category, stat }) => {
-      // console.log("Process Stat: ", stat);
+      console.log("Process Stat: ", stat);
       var currentStatCsv = csvPlayer[category][stat];
       var currentStatDb = dbPlayer[category][stat];
 
@@ -156,11 +175,11 @@ var run = () => {
     };
 
     var getDoc = async (obj) => {
-      return new Promise(function (resolve, reject) {
+      return new Promise((resolve, reject) => {
         collection.findOne({ ehm_id: obj.Id }).then((doc) => {
           resolve(doc);
         })
-      }).catch(function (err) {
+      }).catch((err) => {
         reject(err);
       });
     }
@@ -169,10 +188,11 @@ var run = () => {
       var csvPlayer = initPlayer(csvDoc);
       var categories = [ "general", "stats.hidden", "stats.positional", "stats.mental", "stats.physical", "stats.technical" ];
 
-      for (var i = 0; i < categories.length; i++) {
+      for (let i = 0; i < categories.length; i++) {
         var category = categories[i]
 
-        for (var stat in csvPlayer[category]) {
+        for (let stat in csvPlayer[category]) {
+          // stats with array values tract stat history
           if (Array.isArray(csvPlayer[category][stat])) {
             processStatArray({ csvPlayer: csvPlayer, dbPlayer: dbPlayer, category: category, stat: stat });
           } else {
@@ -183,20 +203,20 @@ var run = () => {
       }
     };
 
-    async function insertDoc (obj) {
-      return new Promise(function(resolve, reject) {
+    var insertDoc = async (obj) => {
+      return new Promise((resolve, reject) => {
         collection.insert(initPlayer(obj)).then((doc) => {
           console.log("inserting.");
           resolve();
         })
-      }).catch(function(err) {
+      }).catch((err) => {
         reject(err);
       });
     }
 
     csv({ delimiter: ";" })
     .fromFile(csvFilePath)
-    .on('json', async function (jsonObj) {
+    .on('json', async (jsonObj) => {
       var doc = await getDoc(jsonObj);
 
       if (doc) {
@@ -209,7 +229,9 @@ var run = () => {
       console.log('Closed Mongo Connection.');
       // db.close();
     });
+  }).catch((err) => {
+    console.log("Mongo Error: ", err);
   });
-}
+};
 
 run();
